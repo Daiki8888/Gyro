@@ -1,77 +1,44 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>ESP32 Gyro Controller</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: sans-serif; text-align: center; padding: 20px; }
-    input, button { font-size: 18px; padding: 10px; margin: 10px; }
-    #status { margin-top: 20px; font-weight: bold; }
-  </style>
-</head>
-<body>
-  <h1>🎮 ESP32 Gyro Controller</h1>
-  <p>ESP32 IP Address:</p>
-  <input type="text" id="espIp" placeholder="192.168.x.x" />
-  <br>
-  <button id="enableGyro">Enable Gyro</button>
+<script>
+  let lastDirection = '';
+  let espBaseUrl = '';
 
-  <p>γ: <span id="gammaVal">0</span>°</p>
-  <p>Direction: <span id="dirVal">Center</span></p>
-  <p id="status">Waiting for permission...</p>
-
-  <script>
-    let lastDirection = '';
-    let espBaseUrl = '';
-
-    function sendCommand(direction) {
-      if (!espBaseUrl) return;
-      if (direction !== lastDirection) {
-        lastDirection = direction;
-        fetch(`${espBaseUrl}/${direction}`).catch(err => {
-          document.getElementById("status").textContent = "❌ Error sending to ESP32";
-          console.error(err);
-        });
-        document.getElementById("dirVal").textContent = direction;
-        document.getElementById("status").textContent = `📤 Sent: ${direction}`;
-      }
+  function sendCommand(direction) {
+    if (!espBaseUrl) return;
+    if (direction !== lastDirection) {
+      lastDirection = direction;
+      fetch(`${espBaseUrl}/${direction}`).catch(err => {
+        console.error("Send error:", err);
+      });
+      document.getElementById("dirVal").textContent = direction;
     }
+  }
 
-    function handleOrientation(event) {
-      const gamma = event.gamma;
-      document.getElementById("gammaVal").textContent = gamma.toFixed(1);
-      if (gamma > 15) sendCommand("right");
-      else if (gamma < -15) sendCommand("left");
-      else sendCommand("center");
+  function handleOrientation(event) {
+    const gamma = event.gamma;
+    document.getElementById("gammaVal").textContent = gamma.toFixed(1);
+    if (gamma > 15) sendCommand("right");
+    else if (gamma < -15) sendCommand("left");
+    else sendCommand("center");
+  }
+
+  document.getElementById("enableOrientation").addEventListener("click", () => {
+    const ip = prompt("Enter ESP32 IP address (e.g. 192.168.0.100)");
+    if (!ip) return;
+    espBaseUrl = `http://${ip}`;
+    document.getElementById("status").textContent = `Sending to: ${espBaseUrl}`;
+
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission()
+        .then(response => {
+          if (response === 'granted') {
+            window.addEventListener("deviceorientation", handleOrientation);
+          } else {
+            alert("Permission denied");
+          }
+        }).catch(console.error);
+    } else {
+      window.addEventListener("deviceorientation", handleOrientation);
     }
-
-    document.getElementById("enableGyro").addEventListener("click", () => {
-      const ip = document.getElementById("espIp").value.trim();
-      if (!ip) {
-        alert("Please enter the ESP32 IP address.");
-        return;
-      }
-      espBaseUrl = `http://${ip}`;
-      document.getElementById("status").textContent = "✅ IP set. Waiting for orientation...";
-
-      if (typeof DeviceOrientationEvent !== 'undefined' &&
-          typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission()
-          .then(response => {
-            if (response === 'granted') {
-              window.addEventListener("deviceorientation", handleOrientation);
-              document.getElementById("status").textContent = "✅ Gyro enabled";
-            } else {
-              alert("Permission denied");
-            }
-          }).catch(console.error);
-      } else {
-        // Androidなど
-        window.addEventListener("deviceorientation", handleOrientation);
-        document.getElementById("status").textContent = "✅ Gyro enabled (no permission needed)";
-      }
-    });
-  </script>
-</body>
-</html>
+  });
+</script>
