@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ESP32 Gyro Remote</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: sans-serif; text-align: center; margin: 2em; }
+    button { padding: 1em 2em; font-size: 18px; margin: 1em; }
+  </style>
+</head>
+<body>
+  <h1>ESP32 Gyro Controller</h1>
+  <p>Send commands to: <input id="espIp" placeholder="192.168.x.x" /></p>
+  <button id="enableGyro">Enable Gyro</button>
+  <p>Gamma: <span id="gammaVal">0</span>°</p>
+  <p>Direction: <span id="dirVal">Center</span></p>
+
+  <script>
+    let lastDirection = '';
+    let espBaseUrl = '';
+
+    function sendDirection(direction) {
+      if (!espBaseUrl) return;
+      if (direction !== lastDirection) {
+        lastDirection = direction;
+        fetch(`${espBaseUrl}/${direction}`).catch(err => console.log('Send error:', err));
+        document.getElementById("dirVal").textContent = direction;
+      }
+    }
+
+    function handleOrientation(e) {
+      const gamma = e.gamma;
+      document.getElementById("gammaVal").textContent = gamma.toFixed(1);
+
+      if (gamma > 15) sendDirection("right");
+      else if (gamma < -15) sendDirection("left");
+      else sendDirection("center");
+    }
+
+    document.getElementById("enableGyro").addEventListener("click", () => {
+      const ip = document.getElementById("espIp").value.trim();
+      if (!ip) {
+        alert("Please enter your ESP32 IP address");
+        return;
+      }
+      espBaseUrl = `http://${ip}`;
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().then(response => {
+          if (response === 'granted') {
+            window.addEventListener('deviceorientation', handleOrientation);
+          } else {
+            alert('Permission denied');
+          }
+        }).catch(console.error);
+      } else {
+        window.addEventListener('deviceorientation', handleOrientation);
+      }
+    });
+  </script>
+</body>
+</html>
