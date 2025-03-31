@@ -1,44 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ESP32-CAM Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; background: #f4f4f4; user-select: none; display: flex; flex-direction: column; align-items: center; }
+    .layout { display: flex; flex-direction: row; justify-content: center; align-items: center; margin-top: 10px; }
+    .slider { width: 300px; margin: 10px; }
+    #cameraFeed { width: 90vw; max-width: 640px; border-radius: 8px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>ESP32-CAM Web Control</h1>
+  <img id="cameraFeed" src="" alt="Camera feed">
+  <div class="layout">
+    <div>
+      <p>Throttle</p>
+      <input id="accel" type="range" min="-100" max="100" value="0" class="slider">
+    </div>
+    <div>
+      <p>Steering (gyro)</p>
+      <p id="gyroValue">0</p>
+    </div>
+  </div>
+
 <script>
-  let lastDirection = '';
-  let espBaseUrl = '';
+  const esp32_ip = "http://100.64.1.27"; // ←←← 自分のESP32のIPに書き換えて！
 
-  function sendCommand(direction) {
-    if (!espBaseUrl) return;
-    if (direction !== lastDirection) {
-      lastDirection = direction;
-      fetch(`${espBaseUrl}/${direction}`).catch(err => {
-        console.error("Send error:", err);
-      });
-      document.getElementById("dirVal").textContent = direction;
-    }
-  }
+  const cameraFeed = document.getElementById("cameraFeed");
+  const accelSlider = document.getElementById("accel");
 
-  function handleOrientation(event) {
-    const gamma = event.gamma;
-    document.getElementById("gammaVal").textContent = gamma.toFixed(1);
-    if (gamma > 15) sendCommand("right");
-    else if (gamma < -15) sendCommand("left");
-    else sendCommand("center");
-  }
+  setInterval(() => {
+    cameraFeed.src = esp32_ip + "/capture?ts=" + Date.now();
+  }, 300); // 300msごとに静止画更新
 
-  document.getElementById("enableOrientation").addEventListener("click", () => {
-    const ip = prompt("Enter ESP32 IP address (e.g. 192.168.0.100)");
-    if (!ip) return;
-    espBaseUrl = `http://${ip}`;
-    document.getElementById("status").textContent = `Sending to: ${espBaseUrl}`;
-
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
-      DeviceOrientationEvent.requestPermission()
-        .then(response => {
-          if (response === 'granted') {
-            window.addEventListener("deviceorientation", handleOrientation);
-          } else {
-            alert("Permission denied");
-          }
-        }).catch(console.error);
-    } else {
-      window.addEventListener("deviceorientation", handleOrientation);
-    }
+  accelSlider.addEventListener("input", () => {
+    fetch(`${esp32_ip}/accel?val=${accelSlider.value}`).catch(console.error);
   });
+
+  // ジャイロ（左右のみ）
+  if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+    DeviceOrientationEvent.requestPermission()
+      .then(permissionState => {
+        if (permissionState === "granted") {
+          window.addEventListener("deviceorientation", (event) => {
+            const gamma = event.gamma || 0; // -90〜90
+            const steerVal = Math.round((gamma / 90) * 90); // -90〜90
+            document.getElementById("gyroValue").textContent = steerVal;
+            fetch(`${esp32_ip}/steer?val=${steerVal + 90}`).catch(console.error);
+          });
+        }
+      }).catch(console.error);
+  } else {
+    // Androidなど自動許可系
+    window.addEventListener("deviceorientation", (event) => {
+      const gamma = event.gamma || 0;
+      const steerVal = Math.round((gamma / 90) * 90);
+      document.getElementById("gyroValue").textContent = steerVal;
+      fetch(`${esp32_ip}/steer?val=${steerVal + 90}`).catch(console.error);
+    });
+  }
 </script>
+</body>
+</html>
